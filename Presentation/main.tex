@@ -1,0 +1,146 @@
+\documentclass[10pt,aspectratio=169]{beamer}
+\usetheme{Madrid}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{}
+
+\title{Project Title}
+\subtitle{Role of Weight Initialization: Xavier vs He vs Random Uniform}
+\author{Rahul Chhabra - 25M0820 \\ Viraj Ashar - 25M0756 \\ Shreyash Thok - 25M0761 \\ Prince - 25M0809\\ Kamal - 25M0814}
+\institute{CS725 FML - IIT Bombay}
+\date{\today}
+
+\definecolor{accent}{RGB}{31,119,180}
+\setbeamercolor{structure}{fg=accent}
+\setbeamercolor{title}{fg=white,bg=accent}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Problem Statement}
+  \begin{itemize}
+    \item Goal: Train the same CNN on CIFAR-10 to see how weight initialization affects learning — comparing naive random uniform against activation-aware Xavier (for Tanh) and He (for ReLU) in terms of convergence speed, stability (activations/gradients), and final validation accuracy.
+    \item Focus: How weight initialization affects our prediction and the final performance.
+    \item Metrics: Accuracy, convergence speed (epochs to target), activation variance, etc 
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{System and Setup}
+  \begin{itemize}
+    \item Model: \textit CNN with three 3×3 conv blocks (32→64→128 channels) plus a final linear classifier for CIFAR-10, run with ReLU/Tanh, using naive uniform init intially and Xavier/He init later
+    \item Datasets: CIFAR-10 (50k/10k), standard train/val splits.
+    \item Hardware: \textit{T4 GPU Google Colab}.
+    \item Framework: \textit PyTorch
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Initialization Formulas (Math)}
+  \begin{itemize}
+    \item Xavier / Glorot: \(w \sim \mathcal{U}\!\Big(-\sqrt{\tfrac{6}{\text{fan}_{\text{in}} + \text{fan}_{\text{out}}}},\; \sqrt{\tfrac{6}{\text{fan}_{\text{in}} + \text{fan}_{\text{out}}}}\Big)\) or \(w \sim \mathcal{N}\!\Big(0,\; \sqrt{\tfrac{2}{\text{fan}_{\text{in}} + \text{fan}_{\text{out}}}}\Big)\).
+    \item He / Kaiming (ReLU-family): \(w \sim \mathcal{U}\!\Big(-\sqrt{\tfrac{6}{\text{fan}_{\text{in}}}},\; \sqrt{\tfrac{6}{\text{fan}_{\text{in}}}}\Big)\) or \(w \sim \mathcal{N}\!\Big(0,\; \sqrt{\tfrac{2}{\text{fan}_{\text{in}}}}\Big)\).
+    \item \(\text{fan}_{\text{in}}\) = inputs to a neuron; \(\text{fan}_{\text{out}}\) = outputs from a neuron. Choice of normal vs. uniform matches PyTorch defaults.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Model Diagram}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \textit{CNN schematic: 3x3 conv blocks, activation, etc.}
+      \\
+      \vspace{1em}
+      \small Reference: \href{https://arxiv.org/pdf/1704.08863}{On weight initialization in deep neural networks}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \includegraphics[height=0.7\textheight]{ModelDiagram.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Challenges: Naive Uniform Init (CIFAR-10)}
+  \begin{itemize}
+    \item ReLU, bound=5: activations/gradients blow up, loss in millions, val acc 18.16\%; no learning.
+    \item ReLU, bound=1: activations/gradients shrink up, loss in millions, val acc 17.26\%; no learning.
+    \item ReLU, bound=0.005: activations/gradients → 0, loss stuck at 2.302, val acc 10.06\%; dead network.
+    \item Tanh, bound=5: activations/gradients blow up, loss in millions, val acc 11.72\%; no learning.
+    \item Tanh, bound=1: unstable, high val loss, val acc 11.32\%, gradients noisy.
+    \item Tanh, bound=0.005: 68.81\% val acc; activations drift/saturate, loss rises later.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Improvements: Xavier (tanh) and He (ReLU)}
+  \begin{itemize}
+    \item Accuracy: He+ReLU - 79.5\%; Xavier+Tanh - 77.3\%; Naive ReLU - 17.26\%; Naive Tanh - 68.81\%.
+    \item Convergence: He/Xavier drop val loss fast; naive ReLU explodes or stays at 2.302; naive Tanh slows then plateaus.
+    \item Gradients: He/Xavier steady; naive ReLU tiny or massive; naive Tanh is varying too much.
+    \item Bottom line: use He for ReLU, Xavier for Tanh.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Metric 1: Validation Accuracy for ReLU}
+\centering
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{relu_bad_val.png}\\
+  \centering{\small Naive Uniform}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{relu_he_val.png}\\
+  \centering{\small He}
+\end{minipage}
+\end{frame}
+
+\begin{frame}{Metric 1: Validation Accuracy for tanh}
+\centering
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{tang_bad_val.png}\\
+  \centering{\small Naive Uniform}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{tanh_xavier_val.png}\\
+  \centering{\small Xavier}
+\end{minipage}
+\end{frame}
+
+\begin{frame}{Metric 2: Gradient Norm for ReLU}
+\centering
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{relu_bad_grad.png}\\
+  \centering{\small Naive Uniform}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{relu_he_grad.png}\\
+  \centering{\small He}
+\end{minipage}
+\end{frame}
+
+\begin{frame}{Metric 2: Gradient Norm for tanh}
+\centering
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{tanh_bad_grad.png}\\
+  \centering{\small Naive Uniform}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{tanh_xavier_grad.png}\\
+  \centering{\small Xavier}
+\end{minipage}
+\end{frame}
+
+\begin{frame}{Conclusion}
+  \begin{itemize}
+    \item He + ReLU: 79.5\% val accuracy; fast, stable. Best choice.
+    \item Xavier + Tanh: 77.3\% val accuracy; steady.
+    \item Naive ReLU: large bound explodes; tiny bound sits at 17.26\% (no learning).
+    \item Naive Tanh: 68.81\% ceiling; slower, noisier, val loss drifts.
+    \item Overall: use He for ReLU, Xavier for Tanh. Naive uniform is either unstable or too weak.
+  \end{itemize}
+\end{frame}
+
+
+\begin{frame}{Project Code}
+  \centering
+  \Large\href{https://github.com/ashar-viraj/glorot-vs-he}{GitHub Repository: github.com/ashar-viraj/glorot-vs-he}
+\end{frame}
+
+\end{document}
